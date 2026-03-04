@@ -8,6 +8,7 @@ export const users = pgTable('users', {
   email: text('email').unique().notNull(),
   emailVerified: timestamp('email_verified'),
   image: text('image'),
+  password: text('password'), // nullable — OAuth users won't have one
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 

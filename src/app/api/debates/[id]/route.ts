@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getDebate, getDebateResponses, getDebateSynthesis } from '@/lib/debates/service'
-
-// TODO: Add auth middleware in T8
-function getUserId(): string | null {
-  return null
-}
+import { auth } from '@/auth'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const userId = getUserId()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

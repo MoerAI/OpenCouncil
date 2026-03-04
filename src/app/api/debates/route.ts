@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createDebateSchema } from '@/lib/debates/validation'
 import { createDebate, listDebates } from '@/lib/debates/service'
-
-// TODO: Add auth middleware in T8
-function getUserId(): string | null {
-  // Placeholder — will be replaced with auth() call
-  return null
-}
+import { auth } from '@/auth'
 
 export async function POST(request: Request) {
-  const userId = getUserId()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -27,7 +23,8 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const userId = getUserId()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

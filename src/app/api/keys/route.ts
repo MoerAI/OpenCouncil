@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { auth } from '@/auth'
 
 const apiKeySchema = z.object({
   provider: z.enum(['openai', 'anthropic', 'google']),
@@ -10,13 +11,9 @@ const deleteKeySchema = z.object({
   provider: z.enum(['openai', 'anthropic', 'google']),
 })
 
-// TODO: Add auth + integrate with crypto/key-service in T8
-function getUserId(): string | null {
-  return null
-}
-
 export async function GET() {
-  const userId = getUserId()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // TODO: listAPIKeys(userId) from key-service
@@ -24,7 +21,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const userId = getUserId()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json() as unknown
@@ -36,7 +34,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const userId = getUserId()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json() as unknown
