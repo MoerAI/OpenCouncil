@@ -1,9 +1,10 @@
 import type { Config } from 'drizzle-kit'
 
-const config: Config = {
+export default {
   schema: './src/db/schema.ts',
   out: './drizzle',
   driver: 'pg',
-}
-
-export default config
+  dbCredentials: {
+    connectionString: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/opencouncil',
+  },
+} satisfies Config
