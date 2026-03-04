@@ -3,8 +3,25 @@ import { auth } from '@/auth'
 import { getDebate, updateDebateStatus, saveDebateResponse, saveSynthesis } from '@/lib/debates/service'
 import { getAPIKey } from '@/lib/crypto/key-service'
 import { SimultaneousDebateEngine } from '@/lib/debates/engines/simultaneous'
-import { getProviderFromModelId } from '@/lib/debates/engines/base'
+import { RoundBasedDebateEngine } from '@/lib/debates/engines/round-based'
+import { StructuredDebateEngine } from '@/lib/debates/engines/structured'
+import { FreeformDebateEngine } from '@/lib/debates/engines/freeform'
+import { type DebateEngine, getProviderFromModelId } from '@/lib/debates/engines/base'
+import type { DebateType } from '@/types/debate'
 import type { SSEEventType } from '@/types/api'
+
+function createEngine(type: DebateType): DebateEngine {
+  switch (type) {
+    case 'simultaneous': return new SimultaneousDebateEngine()
+    case 'round':        return new RoundBasedDebateEngine()
+    case 'structured':   return new StructuredDebateEngine()
+    case 'freeform':     return new FreeformDebateEngine()
+    default: {
+      const _exhaustive: never = type
+      throw new Error(`Unknown debate type: ${_exhaustive}`)
+    }
+  }
+}
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 800
@@ -70,21 +87,23 @@ export async function GET(request: NextRequest) {
     apiKeys[provider] = key
   }
 
-  // 7. Extract debate data for closure capture
+  // 7. Extract debate data for closure capture (avoids TS null-narrowing loss in async generators)
+  const id: string = debateId
   const topic = debate.topic
+  const debateType = debate.type as DebateType
 
   // 8. Update debate status to streaming
-  await updateDebateStatus(debateId, 'streaming')
+  await updateDebateStatus(id, 'streaming')
 
   // 9. Create async generator that runs engine and yields SSE events
   async function* debateEventGenerator(): AsyncGenerator<{
     event: SSEEventType
     data: unknown
   }> {
-    const engine = new SimultaneousDebateEngine()
+    const engine = createEngine(debateType)
 
     const result = await engine.execute({
-      debateId,
+      debateId: id,
       topic,
       models,
       apiKeys,
@@ -111,7 +130,7 @@ export async function GET(request: NextRequest) {
 
       // Save to DB (skip errored responses)
       if (!response.error) {
-        await saveDebateResponse(debateId, response.model, response.content, {
+        await saveDebateResponse(id, response.model, response.content, {
           role: response.role ?? undefined,
           round: response.round ?? undefined,
           tokenCount: response.tokenCount,
@@ -130,11 +149,11 @@ export async function GET(request: NextRequest) {
         },
       }
 
-      await saveSynthesis(debateId, result.synthesis, result.method)
+      await saveSynthesis(id, result.synthesis, result.method)
     }
 
     // Update status to completed
-    await updateDebateStatus(debateId, 'completed')
+    await updateDebateStatus(id, 'completed')
   }
 
   // 10. Build SSE stream
@@ -155,7 +174,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (err) {
-    await updateDebateStatus(debateId, 'failed')
+    await updateDebateStatus(id, 'failed')
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/auth'
+import { listAPIKeys, storeAPIKey, deleteAPIKey } from '@/lib/crypto/key-service'
+import type { LLMProvider } from '@/types/llm'
 
 const apiKeySchema = z.object({
   provider: z.enum(['openai', 'anthropic', 'google']),
@@ -16,8 +18,12 @@ export async function GET() {
   const userId = session?.user?.id
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // TODO: listAPIKeys(userId) from key-service
-  return NextResponse.json([])
+  try {
+    const keys = await listAPIKeys(userId)
+    return NextResponse.json(keys)
+  } catch {
+    return NextResponse.json({ error: 'Failed to list API keys' }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {
@@ -29,8 +35,12 @@ export async function POST(request: Request) {
   const parsed = apiKeySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  // TODO: storeAPIKey(userId, parsed.data.provider, parsed.data.apiKey) from key-service
-  return NextResponse.json({ success: true }, { status: 201 })
+  try {
+    await storeAPIKey(userId, parsed.data.provider as LLMProvider, parsed.data.apiKey)
+    return NextResponse.json({ success: true }, { status: 201 })
+  } catch {
+    return NextResponse.json({ error: 'Failed to store API key' }, { status: 500 })
+  }
 }
 
 export async function DELETE(request: Request) {
@@ -42,6 +52,10 @@ export async function DELETE(request: Request) {
   const parsed = deleteKeySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  // TODO: deleteAPIKey(userId, parsed.data.provider) from key-service
-  return NextResponse.json({ success: true })
+  try {
+    await deleteAPIKey(userId, parsed.data.provider as LLMProvider)
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Failed to delete API key' }, { status: 500 })
+  }
 }

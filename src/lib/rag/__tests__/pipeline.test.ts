@@ -40,7 +40,7 @@ describe('searchWeb', () => {
   it('returns empty sources when TAVILY_API_KEY is not set', async () => {
     delete process.env.TAVILY_API_KEY
     let called = false
-    globalThis.fetch = (() => { called = true; return Promise.resolve(new Response('{}')) }) as typeof fetch
+    globalThis.fetch = (() => { called = true; return Promise.resolve(new Response('{}')) }) as unknown as typeof fetch
     const result = await searchWeb('test query')
     expect(result.sources).toEqual([])
     expect(result.query).toBe('test query')
@@ -49,7 +49,7 @@ describe('searchWeb', () => {
 
   it('returns parsed sources on successful search', async () => {
     const sources = makeSources(3)
-    globalThis.fetch = (() => Promise.resolve(tavilyResponse(sources))) as typeof fetch
+    globalThis.fetch = (() => Promise.resolve(tavilyResponse(sources))) as unknown as typeof fetch
 
     const result = await searchWeb('climate change debate')
     expect(result.sources).toHaveLength(3)
@@ -58,7 +58,7 @@ describe('searchWeb', () => {
   })
 
   it('returns empty sources when Tavily returns error status', async () => {
-    globalThis.fetch = (() => Promise.resolve(new Response('Server Error', { status: 500 }))) as typeof fetch
+    globalThis.fetch = (() => Promise.resolve(new Response('Server Error', { status: 500 }))) as unknown as typeof fetch
 
     const result = await searchWeb('test query')
     expect(result.sources).toEqual([])
@@ -66,7 +66,7 @@ describe('searchWeb', () => {
   })
 
   it('returns empty sources when fetch throws', async () => {
-    globalThis.fetch = (() => Promise.reject(new Error('Network error'))) as typeof fetch
+    globalThis.fetch = (() => Promise.reject(new Error('Network error'))) as unknown as typeof fetch
 
     const result = await searchWeb('test query')
     expect(result.sources).toEqual([])
@@ -74,7 +74,7 @@ describe('searchWeb', () => {
   })
 
   it('handles empty results array gracefully', async () => {
-    globalThis.fetch = (() => Promise.resolve(tavilyResponse([]))) as typeof fetch
+    globalThis.fetch = (() => Promise.resolve(tavilyResponse([]))) as unknown as typeof fetch
 
     const result = await searchWeb('obscure query')
     expect(result.sources).toEqual([])
@@ -149,7 +149,7 @@ describe('retrieveContext (pipeline)', () => {
 
   it('returns assembled context from search results', async () => {
     const sources = makeSources(3)
-    globalThis.fetch = (() => Promise.resolve(tavilyResponse(sources))) as typeof fetch
+    globalThis.fetch = (() => Promise.resolve(tavilyResponse(sources))) as unknown as typeof fetch
 
     const ctx = await retrieveContext('AI regulation debate')
     expect(ctx.query).toBe('AI regulation debate')
@@ -160,7 +160,7 @@ describe('retrieveContext (pipeline)', () => {
   })
 
   it('returns empty context when search fails', async () => {
-    globalThis.fetch = (() => Promise.reject(new Error('Network failure'))) as typeof fetch
+    globalThis.fetch = (() => Promise.reject(new Error('Network failure'))) as unknown as typeof fetch
 
     const ctx = await retrieveContext('some topic')
     expect(ctx.sources).toEqual([])
@@ -170,7 +170,7 @@ describe('retrieveContext (pipeline)', () => {
   it('returns empty context when no API key', async () => {
     delete process.env.TAVILY_API_KEY
     let called = false
-    globalThis.fetch = (() => { called = true; return Promise.resolve(new Response('{}')) }) as typeof fetch
+    globalThis.fetch = (() => { called = true; return Promise.resolve(new Response('{}')) }) as unknown as typeof fetch
 
     const ctx = await retrieveContext('some topic')
     expect(ctx.sources).toEqual([])
