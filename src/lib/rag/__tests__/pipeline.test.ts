@@ -1,12 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { searchWeb } from '../search'
 import { buildContextFromSources } from '../context-builder'
 import { retrieveContext } from '../pipeline'
 import type { SearchSource } from '@/types/rag'
 
-// Mock global fetch
-const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
+// Store original fetch
+const originalFetch = globalThis.fetch
 
 function makeSources(count: number, contentLength = 100): SearchSource[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -18,12 +17,7 @@ function makeSources(count: number, contentLength = 100): SearchSource[] {
 }
 
 function tavilyResponse(
-  results: Array<{
-    url: string
-    title: string
-    content: string
-    score: number
-  }>,
+  results: Array<{ url: string; title: string; content: string; score: number }>,
 ) {
   return new Response(JSON.stringify({ results }), {
     status: 200,
@@ -32,28 +26,30 @@ function tavilyResponse(
 }
 
 describe('searchWeb', () => {
-  const originalEnv = process.env
+  const originalEnv = { ...process.env }
 
   beforeEach(() => {
     process.env = { ...originalEnv, TAVILY_API_KEY: 'test-key' }
-    mockFetch.mockReset()
   })
 
   afterEach(() => {
-    process.env = originalEnv
+    process.env = { ...originalEnv }
+    globalThis.fetch = originalFetch
   })
 
   it('returns empty sources when TAVILY_API_KEY is not set', async () => {
     delete process.env.TAVILY_API_KEY
+    let called = false
+    globalThis.fetch = (() => { called = true; return Promise.resolve(new Response('{}')) }) as typeof fetch
     const result = await searchWeb('test query')
     expect(result.sources).toEqual([])
     expect(result.query).toBe('test query')
-    expect(mockFetch).not.toHaveBeenCalled()
+    expect(called).toBe(false)
   })
 
   it('returns parsed sources on successful search', async () => {
     const sources = makeSources(3)
-    mockFetch.mockResolvedValueOnce(tavilyResponse(sources))
+    globalThis.fetch = (() => Promise.resolve(tavilyResponse(sources))) as typeof fetch
 
     const result = await searchWeb('climate change debate')
     expect(result.sources).toHaveLength(3)
@@ -62,7 +58,7 @@ describe('searchWeb', () => {
   })
 
   it('returns empty sources when Tavily returns error status', async () => {
-    mockFetch.mockResolvedValueOnce(new Response('Server Error', { status: 500 }))
+    globalThis.fetch = (() => Promise.resolve(new Response('Server Error', { status: 500 }))) as typeof fetch
 
     const result = await searchWeb('test query')
     expect(result.sources).toEqual([])
@@ -70,7 +66,7 @@ describe('searchWeb', () => {
   })
 
   it('returns empty sources when fetch throws', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'))
+    globalThis.fetch = (() => Promise.reject(new Error('Network error'))) as typeof fetch
 
     const result = await searchWeb('test query')
     expect(result.sources).toEqual([])
@@ -78,7 +74,7 @@ describe('searchWeb', () => {
   })
 
   it('handles empty results array gracefully', async () => {
-    mockFetch.mockResolvedValueOnce(tavilyResponse([]))
+    globalThis.fetch = (() => Promise.resolve(tavilyResponse([]))) as typeof fetch
 
     const result = await searchWeb('obscure query')
     expect(result.sources).toEqual([])
@@ -115,18 +111,13 @@ describe('buildContextFromSources', () => {
   })
 
   it('respects MAX_CONTEXT_CHARS limit', () => {
-    // Each source block: "[Source: Article N](https://example.com/article-N)\n" + content + "\n\n"
-    // With 5000 char content, each block ~5060 chars. 4 sources = ~20240 chars > 16000 limit
     const sources = makeSources(4, 5000)
     const ctx = buildContextFromSources(sources, 'test')
-
-    // Should include fewer than 4 sources due to char limit
     expect(ctx.sources.length).toBeLessThan(4)
-    // Context text (excluding tags) should be within limit
     const innerText = ctx.contextText
       .replace('<evidence>\n', '')
       .replace('</evidence>', '')
-    expect(innerText.length).toBeLessThanOrEqual(16000 + 100) // small buffer for tag overhead
+    expect(innerText.length).toBeLessThanOrEqual(16100)
   })
 
   it('returns empty context for no sources', () => {
@@ -139,27 +130,26 @@ describe('buildContextFromSources', () => {
   it('estimates token count', () => {
     const sources = makeSources(1, 400)
     const ctx = buildContextFromSources(sources, 'test')
-    // tokenCount should be roughly totalChars / 4
     expect(ctx.tokenCount).toBeGreaterThan(0)
-    expect(ctx.tokenCount).toBeLessThan(500) // 400 chars content + overhead ~= 120 tokens
+    expect(ctx.tokenCount).toBeLessThan(500)
   })
 })
 
 describe('retrieveContext (pipeline)', () => {
-  const originalEnv = process.env
+  const originalEnv = { ...process.env }
 
   beforeEach(() => {
     process.env = { ...originalEnv, TAVILY_API_KEY: 'test-key' }
-    mockFetch.mockReset()
   })
 
   afterEach(() => {
-    process.env = originalEnv
+    process.env = { ...originalEnv }
+    globalThis.fetch = originalFetch
   })
 
   it('returns assembled context from search results', async () => {
     const sources = makeSources(3)
-    mockFetch.mockResolvedValueOnce(tavilyResponse(sources))
+    globalThis.fetch = (() => Promise.resolve(tavilyResponse(sources))) as typeof fetch
 
     const ctx = await retrieveContext('AI regulation debate')
     expect(ctx.query).toBe('AI regulation debate')
@@ -170,7 +160,7 @@ describe('retrieveContext (pipeline)', () => {
   })
 
   it('returns empty context when search fails', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network failure'))
+    globalThis.fetch = (() => Promise.reject(new Error('Network failure'))) as typeof fetch
 
     const ctx = await retrieveContext('some topic')
     expect(ctx.sources).toEqual([])
@@ -179,9 +169,11 @@ describe('retrieveContext (pipeline)', () => {
 
   it('returns empty context when no API key', async () => {
     delete process.env.TAVILY_API_KEY
+    let called = false
+    globalThis.fetch = (() => { called = true; return Promise.resolve(new Response('{}')) }) as typeof fetch
 
     const ctx = await retrieveContext('some topic')
     expect(ctx.sources).toEqual([])
-    expect(mockFetch).not.toHaveBeenCalled()
+    expect(called).toBe(false)
   })
 })
