@@ -2,7 +2,9 @@
   "compilerOptions": {
     // Environment setup & latest features
     "lib": [
-      "ESNext"
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
     ],
     "target": "ESNext",
     "module": "Preserve",
@@ -25,6 +27,9 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
     "incremental": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "plugins": [
       {
         "name": "next"
