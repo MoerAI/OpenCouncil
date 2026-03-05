@@ -36,6 +36,19 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
+# AI / LLM tools
+.sisyphus/
+.claude/
+.claude_*
+.cursorrules
+.cursorignore
+.cursor/
+.aider*
+.github/copilot-*
+CLAUDE.md
+AGENTS.md
+build-output.txt
+
 # Drizzle
 drizzle/
 nul
